@@ -2,8 +2,8 @@ import { prisma, withDbRetry } from "./prisma";
 import { getSession, type SessionData } from "./auth";
 import { ACCESS_STATUSES } from "./subscriptionStatus";
 import {
-  CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY,
-  parseSchedules, parseBreakglass, activeResidentIdsFor, activeBreakglassResidentIds,
+  CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY, SHIFT_DEFINITIONS_KEY,
+  parseSchedules, parseBreakglass, parseShiftDefs, activeResidentIdsFor, activeBreakglassResidentIds,
 } from "./caregiverSchedule";
 
 export interface TenantContext {
@@ -268,7 +268,7 @@ async function resolveCaregiverResidentIds(context: TenantContext): Promise<stri
       where: {
         organizationId: context.organizationId,
         communityId: context.communityId,
-        key: { in: [CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY] },
+        key: { in: [CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY, SHIFT_DEFINITIONS_KEY] },
       },
       select: { key: true, value: true },
     }));
@@ -278,8 +278,12 @@ async function resolveCaregiverResidentIds(context: TenantContext): Promise<stri
     const tz = process.env.FACILITY_TZ || "Asia/Manila";
     const schedRaw = rows.find((r) => r.key === CAREGIVER_SCHEDULE_KEY)?.value;
     const bgRaw = rows.find((r) => r.key === CAREGIVER_BREAKGLASS_KEY)?.value;
+    // This community's own shift windows — loaded per request rather than held in a
+    // module global, so one community's edited shift times can never decide another
+    // community's access. null → the shipped defaults.
+    const shiftDefs = parseShiftDefs(rows.find((r) => r.key === SHIFT_DEFINITIONS_KEY)?.value);
     const ids = new Set<string>();
-    activeResidentIdsFor(context.userId, parseSchedules(schedRaw), now, tz).forEach((i) => ids.add(i));
+    activeResidentIdsFor(context.userId, parseSchedules(schedRaw), now, tz, shiftDefs).forEach((i) => ids.add(i));
     activeBreakglassResidentIds(context.userId, parseBreakglass(bgRaw), now).forEach((i) => ids.add(i));
     return [...ids];
   } catch (e) {

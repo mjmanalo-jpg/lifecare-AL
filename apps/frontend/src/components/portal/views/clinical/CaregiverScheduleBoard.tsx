@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, X, Trash2, ChevronLeft, ChevronRight, CalendarDays,
-  Users, Sun, Sunset, Moon, SunMoon, MoonStar, Pencil, Info, ShieldAlert, Search, Loader2,
+  Users, Sun, Sunset, Moon, SunMoon, MoonStar, Clock3, Pencil, Info, ShieldAlert, Search, Loader2,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -15,10 +15,13 @@ import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   DataState, MicroLabel, controlClass,
 } from "./clinical-ui";
+import ManageShiftsModal from "./ManageShiftsModal";
 import {
-  CAREGIVER_SCHEDULE_KEY, SHIFTS, shiftMeta, shiftsOverlap, parseSchedules, newScheduleId,
-  toDateStr, todayStr, type CaregiverSchedule, type ShiftKey,
+  CAREGIVER_SCHEDULE_KEY, SHIFT_DEFINITIONS_KEY, shiftList, shiftMeta, shiftsOverlap,
+  parseSchedules, parseShiftDefs, newScheduleId,
+  toDateStr, todayStr, type CaregiverSchedule, type ShiftKey, type ShiftDef, type ShiftMeta,
 } from "@/lib/caregiverSchedule";
+import { DEFAULT_SHIFT_DEFS } from "@/lib/shiftDefinitions";
 import type { ClinicianRole } from "./useClinician";
 import { materializeTodayTasks } from "@/lib/carePlanGen";
 
@@ -28,12 +31,23 @@ type StaffRow = { id: string; userId?: string; user?: { name?: string; role?: st
 /** Roles that own the roster (create/edit). Everyone else views their own shifts. */
 const MANAGER_ROLES = new Set(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN", "ORGANIZATION_ADMIN"]);
 
-const SHIFT_UI: Record<ShiftKey, { icon: typeof Sun; dot: string }> = {
+const SHIFT_UI: Record<string, { icon: typeof Sun; dot: string }> = {
   AM: { icon: Sun, dot: "var(--clinical-amber)" },
   PM: { icon: Sunset, dot: "var(--clinical-coral)" },
   NOC: { icon: Moon, dot: "var(--clinical-panel)" },
   D12: { icon: SunMoon, dot: "var(--clinical-teal)" },
   N12: { icon: MoonStar, dot: "var(--clinical-violet, var(--clinical-panel))" },
+};
+
+/** Icon + accent for a shift. A nurse-added shift has no entry, so fall back by the
+ *  time of day it starts — a 05:00 shift reads as a sunrise, a 20:00 one as a moon. */
+const shiftUi = (m: ShiftMeta): { icon: typeof Sun; dot: string } => {
+  if (SHIFT_UI[m.key]) return SHIFT_UI[m.key];
+  const h = Math.floor(m.startMin / 60);
+  if (h >= 5 && h < 12) return { icon: Sun, dot: "var(--clinical-amber)" };
+  if (h >= 12 && h < 17) return { icon: SunMoon, dot: "var(--clinical-teal)" };
+  if (h >= 17 && h < 21) return { icon: Sunset, dot: "var(--clinical-coral)" };
+  return { icon: Moon, dot: "var(--clinical-panel)" };
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -46,6 +60,12 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
     () => parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value),
     [settingRows]
   );
+  // The community's shift table (null until a nurse edits it → shipped defaults).
+  const shiftDefs = useMemo(
+    () => parseShiftDefs(settingRows.find((r) => (r.key || r.id) === SHIFT_DEFINITIONS_KEY)?.value),
+    [settingRows]
+  );
+  const shifts = useMemo(() => shiftList(shiftDefs), [shiftDefs]);
 
   const { data: staffRows } = useLiveQuery<StaffRow>("staff", { query: "include=user&take=300", tables: ["Staff"] });
   const caregivers = useMemo(
@@ -108,12 +128,24 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
     void materializeTodayTasks();
   };
 
+  /** Save the community's shift table. Roster rows keep their shift KEY, so a
+   *  re-timed shift immediately re-reads through its new window everywhere. */
+  const persistShifts = async (next: ShiftDef[]) => {
+    await upsertRecord("app-settings", SHIFT_DEFINITIONS_KEY, { key: SHIFT_DEFINITIONS_KEY, value: JSON.stringify(next) });
+    await refetch();
+    recordAudit({
+      action: "UPDATE", entityType: "caregiver-schedules", entityId: SHIFT_DEFINITIONS_KEY,
+      reason: `Updated shift times — ${next.map((d) => `${d.label} ${d.start}–${d.end}`).join(", ")}`,
+    });
+  };
+
   // ---- Manager calendar state ------------------------------------------------
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [dayOpen, setDayOpen] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [bgOpen, setBgOpen] = useState(false);
+  const [shiftsOpen, setShiftsOpen] = useState(false);
   // Caregiver name fallback: their live `residents` read is shift-scoped, so a
   // FUTURE (or pre-snapshot) shift can't resolve names from resById. Pull the
   // community roster (names/rooms only) so every shift card shows real names.
@@ -222,7 +254,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
   };
 
   const remove = async (s: CaregiverSchedule) => {
-    const c = await Swal.fire({ title: "Remove schedule?", text: `${s.caregiverName} — ${shiftMeta(s.shift).label}, ${s.date}`, icon: "warning", showCancelButton: true, confirmButtonColor: "#e11d48", confirmButtonText: "Remove" });
+    const c = await Swal.fire({ title: "Remove schedule?", text: `${s.caregiverName} — ${shiftMeta(s.shift, shiftDefs).label}, ${s.date}`, icon: "warning", showCancelButton: true, confirmButtonColor: "#e11d48", confirmButtonText: "Remove" });
     if (!c.isConfirmed) return;
     await persist(schedules.filter((x) => x.id !== s.id));
   };
@@ -243,7 +275,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
         <DataState loading={loading && schedules.length === 0} error={error} empty={mine.length === 0}
           emptyTitle="No upcoming shifts" emptyHint="When the nursing team rosters you to residents, your shifts appear here." onRetry={() => void refetch()} skeletonRows={3}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mine.map((s) => <ShiftCard key={s.id} s={s} resById={nameMap} isToday={s.date === today} />)}
+            {mine.map((s) => <ShiftCard key={s.id} s={s} resById={nameMap} isToday={s.date === today} defs={shiftDefs} />)}
           </div>
         </DataState>
         {bgOpen && <BreakGlassModal onClose={() => setBgOpen(false)} />}
@@ -298,12 +330,12 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
                   {uncovered > 0 && <span title={`${uncovered} resident(s) with no caregiver`} className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-[var(--clinical-coral)] text-white text-[9px] font-bold">{uncovered}</span>}
                 </div>
                 <div className="mt-1 space-y-0.5">
-                  {SHIFTS.map((sh) => {
+                  {shifts.map((sh) => {
                     const n = items.filter((x) => x.shift === sh.key).length;
                     if (!n) return null;
                     return (
                       <div key={sh.key} className="flex items-center gap-1 text-[10px] font-medium text-[var(--clinical-ink-soft)]">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SHIFT_UI[sh.key].dot }} />
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: shiftUi(sh).dot }} />
                         <span className="truncate">{sh.key} · {n}</span>
                       </div>
                     );
@@ -322,7 +354,10 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
           items={schedulesByDate.get(dayOpen) ?? []}
           resById={resById}
           allResidents={residents}
+          shifts={shifts}
+          canManage={isManager}
           onClose={() => setDayOpen(null)}
+          onManageShifts={() => setShiftsOpen(true)}
           onAdd={(shift) => openAdd(dayOpen, shift)}
           onEdit={openEdit}
           onDelete={remove}
@@ -333,8 +368,16 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
       {form && (
         <AssignmentModal
           form={form} setForm={setForm} caregivers={caregivers} residents={residents}
-          schedules={schedules}
+          schedules={schedules} shifts={shifts} shiftDefs={shiftDefs}
           saving={saving} onClose={() => setForm(null)} onSave={saveForm}
+        />
+      )}
+      {shiftsOpen && (
+        <ManageShiftsModal
+          defs={shiftDefs ?? DEFAULT_SHIFT_DEFS.map((d) => ({ ...d }))}
+          schedules={schedules}
+          onClose={() => setShiftsOpen(false)}
+          onSave={async (next) => { await persistShifts(next); setShiftsOpen(false); }}
         />
       )}
     </ClinicalPage>
@@ -342,9 +385,9 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
 }
 
 // ── A single shift assignment card ────────────────────────────────────────────
-function ShiftCard({ s, resById, isToday }: { s: CaregiverSchedule; resById: Map<string, { name: string; room: string }>; isToday: boolean }) {
-  const meta = shiftMeta(s.shift);
-  const Icon = SHIFT_UI[s.shift].icon;
+function ShiftCard({ s, resById, isToday, defs }: { s: CaregiverSchedule; resById: Map<string, { name: string; room: string }>; isToday: boolean; defs?: ShiftDef[] | null }) {
+  const meta = shiftMeta(s.shift, defs);
+  const Icon = shiftUi(meta).icon;
   return (
     <ClinicalCard top={isToday ? "green" : "teal"} className="p-4">
       <div className="flex items-center gap-2">
@@ -371,10 +414,12 @@ function ShiftCard({ s, resById, isToday }: { s: CaregiverSchedule; resById: Map
 }
 
 // ── Day detail modal (manager) ────────────────────────────────────────────────
-function DayModal({ date, items, resById, allResidents, onClose, onAdd, onEdit, onDelete }: {
+function DayModal({ date, items, resById, allResidents, shifts, canManage, onClose, onAdd, onEdit, onDelete, onManageShifts }: {
   date: string; items: CaregiverSchedule[]; resById: Map<string, { name: string; room: string }>;
   allResidents: { id: string; name: string; room: string }[];
+  shifts: ShiftMeta[]; canManage: boolean;
   onClose: () => void; onAdd: (shift: ShiftKey) => void; onEdit: (s: CaregiverSchedule) => void; onDelete: (s: CaregiverSchedule) => void;
+  onManageShifts: () => void;
 }) {
   const pretty = new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const covered = new Set(items.flatMap((x) => x.residentIds));
@@ -398,13 +443,13 @@ function DayModal({ date, items, resById, allResidents, onClose, onAdd, onEdit, 
               </div>
             </div>
           )}
-          {SHIFTS.map((sh) => {
+          {shifts.map((sh) => {
             const rows = items.filter((x) => x.shift === sh.key);
-            const Icon = SHIFT_UI[sh.key].icon;
+            const Icon = shiftUi(sh).icon;
             return (
               <div key={sh.key}>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-bold text-[var(--clinical-ink)] flex items-center gap-1.5"><Icon className="w-4 h-4" style={{ color: SHIFT_UI[sh.key].dot }} /> {sh.label} <span className="text-[var(--clinical-muted)] font-medium">{sh.range}</span></h3>
+                  <h3 className="text-sm font-bold text-[var(--clinical-ink)] flex items-center gap-1.5"><Icon className="w-4 h-4" style={{ color: shiftUi(sh).dot }} /> {sh.label} <span className="text-[var(--clinical-muted)] font-medium">{sh.range}</span></h3>
                   <ClinicalButton variant="secondary" size="sm" onClick={() => onAdd(sh.key)}><Plus className="w-3.5 h-3.5" /> Assign</ClinicalButton>
                 </div>
                 {rows.length === 0 ? (
@@ -435,6 +480,15 @@ function DayModal({ date, items, resById, allResidents, onClose, onAdd, onEdit, 
               </div>
             );
           })}
+          {canManage && (
+            <button
+              onClick={onManageShifts}
+              className="w-full rounded-lg border border-dashed px-3 py-2.5 text-xs font-semibold text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"
+              style={{ borderColor: "var(--clinical-border)" }}
+            >
+              <Clock3 className="mr-1.5 inline h-3.5 w-3.5" /> Manage shift times · add a shift
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -536,11 +590,12 @@ function BreakGlassModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Assignment form modal ─────────────────────────────────────────────────────
-function AssignmentModal({ form, setForm, caregivers, residents, schedules, saving, onClose, onSave }: {
+function AssignmentModal({ form, setForm, caregivers, residents, schedules, shifts, shiftDefs, saving, onClose, onSave }: {
   form: FormState; setForm: (f: FormState) => void;
   caregivers: { id: string; userId?: string; name: string }[];
   residents: { id: string; name: string; room: string }[];
   schedules: CaregiverSchedule[];
+  shifts: ShiftMeta[]; shiftDefs?: ShiftDef[] | null;
   saving: boolean; onClose: () => void; onSave: () => void;
 }) {
   // Residents already rostered to a caregiver for an OVERLAPPING shift on this date
@@ -553,10 +608,10 @@ function AssignmentModal({ form, setForm, caregivers, residents, schedules, savi
     const s = new Set<string>();
     for (const sc of schedules) {
       if (sc.id === form.id) continue;
-      if (sc.date === form.date && shiftsOverlap(sc.shift, form.shift)) sc.residentIds.forEach((r) => s.add(r));
+      if (sc.date === form.date && shiftsOverlap(sc.shift, form.shift, shiftDefs)) sc.residentIds.forEach((r) => s.add(r));
     }
     return s;
-  }, [schedules, form.date, form.shift, form.id]);
+  }, [schedules, form.date, form.shift, form.id, shiftDefs]);
   const available = useMemo(() => residents.filter((r) => !takenElsewhere.has(r.id)), [residents, takenElsewhere]);
   const toggle = (id: string) => {
     const set = new Set(form.residentIds);
@@ -579,7 +634,7 @@ function AssignmentModal({ form, setForm, caregivers, residents, schedules, savi
             <label className="block">
               <MicroLabel className="mb-1">Shift</MicroLabel>
               <select value={form.shift} onChange={(e) => setForm({ ...form, shift: e.target.value as ShiftKey })} className={controlClass}>
-                {SHIFTS.map((s) => <option key={s.key} value={s.key}>{s.label} ({s.range})</option>)}
+                {shifts.map((s) => <option key={s.key} value={s.key}>{s.label} ({s.range})</option>)}
               </select>
             </label>
           </div>

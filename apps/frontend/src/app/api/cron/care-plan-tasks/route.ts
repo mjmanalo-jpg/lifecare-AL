@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
-import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentAtHour, caregiversForResidentToday } from "@/lib/caregiverSchedule";
+import { CAREGIVER_SCHEDULE_KEY, SHIFT_DEFINITIONS_KEY, parseSchedules, parseShiftDefs, assigneeForResidentAtHour, caregiversForResidentToday } from "@/lib/caregiverSchedule";
 import { occurrencesFor, routeHourOf } from "@/lib/carePlanTaskRouting";
 import { generateRoutine, domainInputsFromItems } from "@/lib/lifecare/carePlanRoutine";
 
@@ -72,6 +72,10 @@ async function materializeCommunity(communityId: string, organizationId: string 
   // Caregiver roster (migration-free app-setting).
   const sched = await prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } });
   const schedules = parseSchedules(sched?.value);
+  // The community's shift windows (null → shipped defaults), so a facility that
+  // re-timed its shifts routes each occurrence to whoever its own clock says is on.
+  const shiftRow = await prisma.appSetting.findFirst({ where: { communityId, key: SHIFT_DEFINITIONS_KEY }, select: { value: true } });
+  const shiftDefs = parseShiftDefs(shiftRow?.value);
 
   let created = 0;
   for (const plan of plans) {
@@ -97,7 +101,7 @@ async function materializeCommunity(communityId: string, organizationId: string 
         if (seen.has(key)) continue;
         seen.add(key);
         // Routine times are fixed; the owner is whoever is rostered at that hour.
-        const shiftAssignee = assigneeForResidentAtHour(schedules, plan.residentId, ev.startHour, now, TZ);
+        const shiftAssignee = assigneeForResidentAtHour(schedules, plan.residentId, ev.startHour, now, TZ, shiftDefs);
         try {
           await prisma.task.create({
             data: {
@@ -130,7 +134,7 @@ async function materializeCommunity(communityId: string, organizationId: string 
         const key = `${plan.id}|${title}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const shiftAssignee = assigneeForResidentAtHour(schedules, plan.residentId, routeHourOf(occ), now, TZ);
+        const shiftAssignee = assigneeForResidentAtHour(schedules, plan.residentId, routeHourOf(occ), now, TZ, shiftDefs);
         try {
           await prisma.task.create({
             data: {

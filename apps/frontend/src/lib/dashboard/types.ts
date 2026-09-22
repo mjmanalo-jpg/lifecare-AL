@@ -70,7 +70,9 @@ export interface DashboardMetric {
 }
 
 export interface DashboardShift {
-  key: "AM" | "PM" | "NOC";
+  /** A shift key from the community's shift table — not a fixed set, since a nurse
+   *  can add shifts (see lib/shiftDefinitions). */
+  key: string;
   label: string;
   range: string;
   startsAt: string;
