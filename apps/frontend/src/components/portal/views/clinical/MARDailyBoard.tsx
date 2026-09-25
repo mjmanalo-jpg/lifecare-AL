@@ -85,6 +85,22 @@ function slotTimes(frequency: string, custom: string[] = []): { slot: string; ti
   if (slots[0] === "PRN") return slots.map((slot) => ({ slot, time: "PRN" }));
   return slots.map((slot, i) => ({ slot, time: /^\d{1,2}:\d{2}$/.test(custom[i] || "") ? custom[i] : SLOT_TIME[slot] }));
 }
+// A med's custom-time history: one entry per edit, dated by its effective date.
+// Versioned so editing a dose time only changes the schedule from that date
+// forward — a past date's occurrences still resolve against the time that was
+// actually in effect back then, not whatever it's been changed to since.
+type MedTimeVersion = { from: string; times: string[] };
+// Legacy stored shape (pre-versioning) was a flat string[] — treat it as always effective.
+function normalizeMedTimeVersions(raw: unknown): MedTimeVersion[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  return typeof raw[0] === "string" ? [{ from: "0000-01-01", times: raw as string[] }] : (raw as MedTimeVersion[]);
+}
+// The custom times in effect for a med on a given date: the latest version
+// whose effective date is on or before it.
+function timesAsOf(versions: MedTimeVersion[] | undefined, iso: string): string[] {
+  const applicable = (versions || []).filter((v) => v.from <= iso);
+  return applicable.length ? applicable.reduce((a, b) => (b.from >= a.from ? b : a)).times : [];
+}
 const activeOn = (m: Row, iso: string) => { const st = dayOf(m.startDate); const en = dayOf(m.endDate); return (!st || st <= iso) && (!en || en >= iso) && s(m.status) !== "DISCONTINUED"; };
 // Split "Brand (Generic)" for display.
 const splitName = (name: string): [string, string] => { const mt = name.match(/^(.*?)\s*\((.*)\)\s*$/); return mt ? [mt[1], mt[2]] : [name, ""]; };
@@ -140,19 +156,34 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
   const isVitalsRequired = (medId: string) => Boolean(vitalsReqMap[medId]);
 
   // Nurse-set dose times per med — stored migration-free as an app-setting map
-  // { [medicationId]: ["08:00","20:00"] } (one HH:MM per scheduled slot, in slot
-  // order). Absent → the SLOT_TIME defaults apply. No Medication column.
-  const medTimesMap = useMemo<Record<string, string[]>>(() => {
+  // { [medicationId]: [{from, times}] }, a dated history (see MedTimeVersion).
+  // Absent → the SLOT_TIME defaults apply. No Medication column.
+  const medTimesMap = useMemo<Record<string, MedTimeVersion[]>>(() => {
     const row = (setQ.data || []).find((r) => s(r.key || r.id) === MED_TIMES_KEY);
-    try { return row ? (JSON.parse(s(row.value)) as Record<string, string[]>) : {}; } catch { return {}; }
+    try {
+      const raw = row ? (JSON.parse(s(row.value)) as Record<string, unknown>) : {};
+      return Object.fromEntries(Object.entries(raw).map(([id, v]) => [id, normalizeMedTimeVersions(v)]));
+    } catch { return {}; }
   }, [setQ.data]);
-  // A med's scheduled slots with their effective (custom or default) clock times.
-  const slotTimesFor = (m: Row) => slotTimes(s(m.frequency), medTimesMap[s(m.id)] || []);
-  const timeForSlot = (m: Row, slot: string) => (slot === "PRN" ? "PRN" : slotTimesFor(m).find((x) => x.slot === slot)?.time || SLOT_TIME[slot] || "PRN");
+  // A med's scheduled slots with their effective (custom or default) clock times
+  // AS OF `iso` — a past date keeps the times that were in effect back then, even
+  // if the nurse has since changed them.
+  const slotTimesFor = (m: Row, iso: string) => slotTimes(s(m.frequency), timesAsOf(medTimesMap[s(m.id)], iso));
+  const timeForSlot = (m: Row, slot: string, iso: string) => (slot === "PRN" ? "PRN" : slotTimesFor(m, iso).find((x) => x.slot === slot)?.time || SLOT_TIME[slot] || "PRN");
+  // Today-effective times per med — what the Add/Edit modal and Medication
+  // Summary show, since both describe the order's present-day schedule.
+  const currentMedTimes = useMemo<Record<string, string[]>>(() => {
+    const iso = todayIso();
+    return Object.fromEntries(Object.keys(medTimesMap).map((id) => [id, timesAsOf(medTimesMap[id], iso)]));
+  }, [medTimesMap]);
   const saveMedTimes = async (medId: string, times: string[]) => {
     if (!medId) return;
     const next = { ...medTimesMap };
-    if (times.length) next[medId] = times; else delete next[medId];
+    if (times.length) {
+      const today = todayIso();
+      const history = (next[medId] || []).filter((v) => v.from !== today);
+      next[medId] = [...history, { from: today, times }];
+    } else delete next[medId];
     await upsertRecord("app-settings", MED_TIMES_KEY, { key: MED_TIMES_KEY, value: JSON.stringify(next) });
     await setQ.refetch();
   };
@@ -206,7 +237,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
     if (!activeOn(m, iso)) return [];
     // On-demand meds have no scheduled clock doses — rendered as an Administer button.
     if (isOnDemandFreq(s(m.frequency))) return [];
-    return slotTimesFor(m).map(({ slot, time }) => {
+    return slotTimesFor(m, iso).map(({ slot, time }) => {
       const mar = (marQ.data || []).find((a) => s(a.medicationId) === s(m.id) && dayOf(a.scheduledTime) === iso && (time === "PRN" || hhmmOf(a.scheduledTime) === time));
       const status = (mar ? s(mar.status).toUpperCase() : "PENDING") as string;
       const reason = mar ? (s(mar.reasonForRefusal) || s(mar.heldReason)) : "";
@@ -242,7 +273,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
       });
       if (!proceed.isConfirmed) return;
     }
-    const scheduledTime = slot === "PRN" ? new Date().toISOString() : new Date(`${iso}T${timeForSlot(m, slot)}:00`).toISOString();
+    const scheduledTime = slot === "PRN" ? new Date().toISOString() : new Date(`${iso}T${timeForSlot(m, slot, iso)}:00`).toISOString();
     const cleanReason = reason.trim();
     // Store the reason in the matching column so it persists on the record; clear
     // the other so switching status (e.g. Held → Given) doesn't leave a stale note.
@@ -295,7 +326,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
   const submitDose = async () => {
     if (!doseFor) return;
     const { m, slot, iso, marId } = doseFor;
-    const timing = doseTiming(timeForSlot(m, slot), iso, Date.now());
+    const timing = doseTiming(timeForSlot(m, slot, iso), iso, Date.now());
     // Strict window: NO outcome (Given, Refused or Held) can be recorded before
     // the window opens — the dose event hasn't happened yet.
     if (timing?.phase === "EARLY") {
@@ -320,7 +351,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
   // Dose-modal derived state (shared by the inline list rows and the embedded
   // detail view). Computed at component scope so the Record-dose modal renders
   // from either place.
-  const doseT = doseFor ? doseTiming(timeForSlot(doseFor.m, doseFor.slot), doseFor.iso, nowMs) : null;
+  const doseT = doseFor ? doseTiming(timeForSlot(doseFor.m, doseFor.slot, doseFor.iso), doseFor.iso, nowMs) : null;
   const blockedEarly = doseT?.phase === "EARLY";
   const lateGiven = doseStatus === "GIVEN" && doseT?.phase === "LATE";
   const vitalsNeeded = !!doseFor && isVitalsRequired(s(doseFor.m.id)) && !vitalsTodayByResident.has(s(doseFor.m.residentId));
@@ -337,7 +368,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
             <p className="text-sm font-bold text-[var(--clinical-ink)]">Record dose</p>
-            <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{s(doseResident?.name)} · {s(doseFor.m.route) || "Oral"} · {doseFor.slot === "PRN" ? "PRN (as needed)" : to12h(timeForSlot(doseFor.m, doseFor.slot))} · {date}</p>
+            <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{s(doseResident?.name)} · {s(doseFor.m.route) || "Oral"} · {doseFor.slot === "PRN" ? "PRN (as needed)" : to12h(timeForSlot(doseFor.m, doseFor.slot, doseFor.iso))} · {date}</p>
           </div>
           <button type="button" onClick={() => setDoseFor(null)} aria-label="Close" className="-mr-1 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>
         </div>
@@ -351,7 +382,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
           {doseT?.phase === "EARLY" && (
             <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--clinical-coral)", backgroundColor: "color-mix(in srgb, var(--clinical-coral) 12%, var(--clinical-surface))", color: "var(--clinical-coral)" }}>
               <span className="flex items-center gap-1.5 font-bold"><Lock className="w-4 h-4" /> Too early to record</span>
-              <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-coral) 80%, var(--clinical-ink))" }}>Scheduled {to12h(timeForSlot(doseFor.m, doseFor.slot))} · window opens <b>{msTo12h(doseT.openMs)}</b>. No outcome — Given, Refused or Held — can be recorded before then.</span>
+              <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-coral) 80%, var(--clinical-ink))" }}>Scheduled {to12h(timeForSlot(doseFor.m, doseFor.slot, doseFor.iso))} · window opens <b>{msTo12h(doseT.openMs)}</b>. No outcome — Given, Refused or Held — can be recorded before then.</span>
             </div>
           )}
           {/* Outcome + Reason side-by-side when a reason is required (uses the wide
@@ -448,7 +479,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
   // Quick "Give": record an on-time dose in one tap; fall back to the inline form
   // when a reason / vitals / early-window decision is needed.
   const quickGive = (m: Row, slot: string, marId: string) => {
-    const t = doseTiming(timeForSlot(m, slot), date, nowMs);
+    const t = doseTiming(timeForSlot(m, slot, date), date, nowMs);
     const needsForm = (t && t.phase !== "OPEN") || (isVitalsRequired(s(m.id)) && !vitalsTodayByResident.has(s(m.residentId)));
     if (needsForm) openDose(m, slot, date, marId, "GIVEN");
     else administer(m, slot, date, marId, "GIVEN");
@@ -654,7 +685,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
       meds.forEach((m) => {
         if (!activeOn(m, iso)) return;
         if (isOnDemandFreq(s(m.frequency))) return;
-        slotTimesFor(m).forEach(({ slot, time }) => {
+        slotTimesFor(m, iso).forEach(({ slot, time }) => {
           if (time === "PRN") return;
           const [h, mm] = time.split(":").map(Number);
           if (h * 60 + mm > nowMin) return; // not due yet
@@ -697,7 +728,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
         <div className="space-y-3">
           {renderMedCards(rMeds)}
         </div>
-        {addFor && <AddMedicationModal resident={openRes} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} customTimes={addFor.__edit ? (medTimesMap[s(addFor.id)] || []) : []} medInventory={invItems} onSaveVitalsFlag={saveVitalsFlag} onSaveTimes={saveMedTimes} onClose={() => setAddFor(null)} onDone={refetch} />}
+        {addFor && <AddMedicationModal resident={openRes} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} customTimes={addFor.__edit ? (currentMedTimes[s(addFor.id)] || []) : []} medInventory={invItems} onSaveVitalsFlag={saveVitalsFlag} onSaveTimes={saveMedTimes} onClose={() => setAddFor(null)} onDone={refetch} />}
       </div>
     );
   }
@@ -778,9 +809,9 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
             </div>
           </div>
         </DataState>
-      </>) : <SummaryView residents={residents} meds={meds} medTimes={medTimesMap} onBack={() => setTab("daily")} />}
+      </>) : <SummaryView residents={residents} meds={meds} medTimes={currentMedTimes} onBack={() => setTab("daily")} />}
 
-      {addFor && <AddMedicationModal resident={addFor} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} customTimes={addFor.__edit ? (medTimesMap[s(addFor.id)] || []) : []} medInventory={invItems} onSaveVitalsFlag={saveVitalsFlag} onSaveTimes={saveMedTimes} onClose={() => setAddFor(null)} onDone={refetch} />}
+      {addFor && <AddMedicationModal resident={addFor} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} customTimes={addFor.__edit ? (currentMedTimes[s(addFor.id)] || []) : []} medInventory={invItems} onSaveVitalsFlag={saveVitalsFlag} onSaveTimes={saveMedTimes} onClose={() => setAddFor(null)} onDone={refetch} />}
     </div>
   );
 }
