@@ -103,3 +103,13 @@ migrate_*.sql
 # Tutorial recordings & screenshots
 SLMS-Care-Workflow-Tutorial.mp4
 shots/
+
+# Working design mockups — not a deliverable, keep out of git
+docs/redesign/
+
+# UAT working docs (tracker/briefing/assignments/plan) — kept locally, not tracked.
+# Other docs/UAT/* deliverables (pentest, PHI review, env setup) stay tracked.
+docs/UAT/UAT-Briefing.html
+docs/UAT/UAT-TESTER-ASSIGNMENTS.md
+docs/UAT/UAT-Test-Tracker.xlsx
+docs/UAT/UAT-TEST-PLAN.md
